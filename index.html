@@ -134,7 +134,7 @@
                 try {
                     const feeds = { images: inputTensor };
                     const results = await session.run(feeds);
-                    const outputData = results.output0.data;
+                    const outputData = results.output0;
 
                     // Draw image on canvas
                     canvas.width = image.width;
@@ -173,36 +173,41 @@
 
         function processOutput(output, imgWidth, imgHeight) {
             const boxes = [];
-            const stride = 85; // x, y, w, h, confidence, 80 class scores
-            const numDetections = output.length / stride;
+            // The output tensor has shape [1, 84, 8400]. 
+            // 84 = x, y, w, h, and 80 class scores.
+            // 8400 = number of potential detections.
+            const numDetections = output.dims[2]; // Should be 8400
+            const numClasses = 80;
+            const stride = numDetections;
 
-            for (let i = 0; i < numDetections; ++i) {
-                const offset = i * stride;
-                const confidence = output[offset + 4];
-                
-                if (confidence > 0.5) { // Confidence threshold
+            for (let i = 0; i < numDetections; i++) {
+                // The 5th row (index 4) contains the object confidence score
+                const confidence = output.data[4 * stride + i];
+
+                if (confidence > 0.45) { // Confidence threshold
                     let maxProb = 0;
                     let classId = 0;
-                    for (let j = 0; j < 80; ++j) {
-                        if (output[offset + 5 + j] > maxProb) {
-                            maxProb = output[offset + 5 + j];
+                    // Iterate through the 80 class scores for this detection
+                    for (let j = 0; j < numClasses; j++) {
+                        const prob = output.data[(5 + j) * stride + i];
+                        if (prob > maxProb) {
+                            maxProb = prob;
                             classId = j;
                         }
                     }
 
                     if (maxProb > 0.5) { // Class probability threshold
-                        const centerX = output[offset];
-                        const centerY = output[offset + 1];
-                        const width = output[offset + 2];
-                        const height = output[offset + 3];
+                        const centerX = output.data[0 * stride + i];
+                        const centerY = output.data[1 * stride + i];
+                        const width = output.data[2 * stride + i];
+                        const height = output.data[3 * stride + i];
 
                         boxes.push({
                             classId: classId,
                             probability: maxProb,
-                            confidence: confidence,
                             bounding: [
-                                centerX - width / 2,
-                                centerY - height / 2,
+                                centerX - width / 2, // x1
+                                centerY - height / 2, // y1
                                 width,
                                 height,
                             ],
@@ -268,5 +273,6 @@
 </body>
 
 </html>
+
 
 
