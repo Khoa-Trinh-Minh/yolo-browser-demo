@@ -134,7 +134,7 @@
                 try {
                     const feeds = { images: inputTensor };
                     const results = await session.run(feeds);
-                    const outputData = results.output.data;
+                    const outputData = results.output0.data;
 
                     // Draw image on canvas
                     canvas.width = image.width;
@@ -268,4 +268,5 @@
 </body>
 
 </html>
+
 
