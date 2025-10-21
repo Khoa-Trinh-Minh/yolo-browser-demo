@@ -134,7 +134,7 @@
                 try {
                     const feeds = { images: inputTensor };
                     const results = await session.run(feeds);
-                    const outputData = results.output0;
+                    const outputData = results.output0.data;
 
                     // Draw image on canvas
                     canvas.width = image.width;
@@ -173,50 +173,43 @@
 
         function processOutput(output, imgWidth, imgHeight) {
             const boxes = [];
-            // The output tensor has shape [1, 84, 8400]. 
-            // 84 = x, y, w, h, and 80 class scores.
-            // 8400 = number of potential detections.
-            const numDetections = output.dims[2]; // Should be 8400
             const numClasses = 80;
-            const stride = numDetections;
+            const numDetections = 8400; // Detections per image
 
             for (let i = 0; i < numDetections; i++) {
-                // The 5th row (index 4) contains the object confidence score
-                const confidence = output.data[4 * stride + i];
-
-                if (confidence > 0.45) { // Confidence threshold
-                    let maxProb = 0;
-                    let classId = 0;
-                    // Iterate through the 80 class scores for this detection
-                    for (let j = 0; j < numClasses; j++) {
-                        const prob = output.data[(5 + j) * stride + i];
-                        if (prob > maxProb) {
-                            maxProb = prob;
-                            classId = j;
-                        }
+                // Find the class with the highest score
+                let maxProb = 0;
+                let classId = -1;
+                for (let j = 0; j < numClasses; j++) {
+                    // The class scores start at the 5th row (index 4)
+                    const classProb = output[(j + 4) * numDetections + i];
+                    if (classProb > maxProb) {
+                        maxProb = classProb;
+                        classId = j;
                     }
+                }
 
-                    if (maxProb > 0.5) { // Class probability threshold
-                        const centerX = output.data[0 * stride + i];
-                        const centerY = output.data[1 * stride + i];
-                        const width = output.data[2 * stride + i];
-                        const height = output.data[3 * stride + i];
+                // Check if the highest score is above our threshold
+                if (maxProb > 0.5) { // Confidence Threshold
+                    const centerX = output[0 * numDetections + i];
+                    const centerY = output[1 * numDetections + i];
+                    const width = output[2 * numDetections + i];
+                    const height = output[3 * numDetections + i];
 
-                        boxes.push({
-                            classId: classId,
-                            probability: maxProb,
-                            bounding: [
-                                centerX - width / 2, // x1
-                                centerY - height / 2, // y1
-                                width,
-                                height,
-                            ],
-                        });
-                    }
+                    boxes.push({
+                        classId: classId,
+                        probability: maxProb,
+                        bounding: [
+                            centerX - width / 2, // x1
+                            centerY - height / 2, // y1
+                            width,
+                            height,
+                        ],
+                    });
                 }
             }
 
-            // Non-Maximum Suppression (NMS)
+            // Non-Maximum Suppression (NMS) to remove overlapping boxes
             const nmsThreshold = 0.45;
             const finalBoxes = [];
             boxes.sort((a, b) => b.probability - a.probability);
@@ -234,7 +227,7 @@
                 }
             }
             
-            // Draw final boxes
+            // Draw the final, filtered boxes
             finalBoxes.forEach(box => drawBoundingBox(box, imgWidth, imgHeight));
         }
 
@@ -273,6 +266,7 @@
 </body>
 
 </html>
+
 
 
 
